@@ -29,6 +29,7 @@ MODULE PsiObject
    USE GauConf
    USE OperatorDefine
    USE MatrixInversion
+   USE SharedData, ONLY: GaussParLGS
    IMPLICIT NONE
 
    PRIVATE
@@ -680,6 +681,13 @@ MODULE PsiObject
       INTEGER :: GauSet                  ! Index which defines the Gaussian set considered in the current iteration
       INTEGER :: iPtr,   jPtr            ! Integer index pointers
       INTEGER( SHORT_INTEGER_KIND )   :: NShort  ! Integer index for LAPACK calls
+      INTEGER(SHORT_INTEGER_KIND), DIMENSION(:), ALLOCATABLE :: Pivot
+      COMPLEX, DIMENSION(:), ALLOCATABLE        :: Work
+      REAL, DIMENSION(:), ALLOCATABLE           :: RWork
+      COMPLEX, DIMENSION(1)                     :: tmpWork
+      INTEGER( SHORT_INTEGER_KIND )             :: Rank, LWork, Info
+      COMPLEX, DIMENSION(:,:), ALLOCATABLE      :: tmpCMatrix      ! C matrix
+      COMPLEX, DIMENSION(:), ALLOCATABLE        :: tmpYVector
 
       ! other complex and real variables
       COMPLEX :: OverIFactor, Rho, HAlpha, TauMatrix
@@ -716,7 +724,8 @@ MODULE PsiObject
 
       ALLOCATE( SbetaDotSinv(Psi%NrPrimGau,Psi%NrCfg), ProjGDeriv(Psi%NrPrimGau,Psi%NrPrimGau), &
                 ProjHamilt(Psi%NrPrimGau,Psi%NrCfg), FirstMom(Psi%NrCfg,Psi%NrPrimGau) )
-      ALLOCATE(  CMatrix(Psi%NrPrimGau,Psi%NrPrimGau), CMatrixInv(Psi%NrPrimGau,Psi%NrPrimGau), YVector(Psi%NrPrimGau) )
+      ALLOCATE( CMatrix(Psi%NrPrimGau,Psi%NrPrimGau), CMatrixInv(Psi%NrPrimGau,Psi%NrPrimGau), YVector(Psi%NrPrimGau) )
+      ALLOCATE( tmpCMatrix(Psi%NrPrimGau,Psi%NrPrimGau), tmpYVector(Psi%NrPrimGau), Work(1), RWork(2*Psi%NrPrimGau), Pivot(Psi%NrPrimGau) )
 
       CALL StartTimer(GaussDerivClock)
       CMatrixCondMin = 1.E+99
@@ -829,21 +838,72 @@ MODULE PsiObject
 
          END IF
 
-         ! invert C-matrix
-         CALL MatrixInversionDo( CMatrix(:,:), CMatrixInv(:,:), 2, InvCondNr, CMask(1:NInv) )
-         IF ( InvCondNr < CMatrixCondMin ) CMatrixCondMin = InvCondNr
+         IF (GaussParLGS) THEN
+            ! set the Y vector of fixed gaussians
+            DO iPrimL = NInv+1, Psi%NrPrimGau
+               YVector(CMask(iPrimL)) = CMPLX(0.0,0.0)
+            END DO
+            tmpCMatrix = CMatrix
+            tmpYVector = OverIFactor*YVector
+            !Pivot = 0
+            !write(*,*) "ZGELSY 1 at ", ActualTime
+            !IF (ActualTime > 80.0) THEN
+            !   STOP 1
+            !END IF
+            !write(*,*) "CMAt:"
+            !write(*,*) CMatrix
+            !write(*,*) "YVec:"
+            !write(*,*) YVector
+            CALL ZGELSY(Psi%NrPrimGau, Psi%NrPrimGau, 1, tmpCMatrix, Psi%NrPrimGau, tmpYVector, Psi%NrPrimGau, Pivot, 1.0D-020, Rank, tmpWork, -1, RWork, Info)
+            !write(*,*) "ZGELSY INFO = ", Info
+            DEALLOCATE(Work)
+            LWork = int(real(tmpWork(1)))
+            ALLOCATE(Work(LWork))
+            !write(*,*) "tmpWork=", tmpWork, " size(Work)=", size(Work)
+            !Pivot = 0
+            !Pivot(1) = 1
+            CALL ZGELSY(Psi%NrPrimGau, Psi%NrPrimGau, 1, tmpCMatrix, Psi%NrPrimGau, tmpYVector, Psi%NrPrimGau, Pivot, 1.0D-020, Rank, Work, LWork, RWork, Info)
+            !write(*,*) "ZGELSY 2 at ", ActualTime
+            IF (INFO /= 0) THEN
+               STOP "ERROR IN ZGELSY"
+            END IF
+            !write(*,*) "ZGELSY INFO = ", Info
+            !write(*,*) "ZGELSY Rank = ", Rank
+            !write(*,*) "ZGELSY N = ", Psi%NrPrimGau
+            !write(*,*) "ZGELSY Size CMat = ", SIZE(CMatrix)
+            !write(*,*) "ZGELSY Size Yvec = ", SIZE(YVector)
 
-         ! set the Y vector of fixed gaussians
-         DO iPrimL = NInv+1, Psi%NrPrimGau
-            YVector(CMask(iPrimL)) = CMPLX(0.0,0.0)
-         END DO
+            PsiDeriv%GaussPar(:, :, GauSet) = CMPLX(0.0,0.0)
+            DO iPrimL=1, Psi%NrPrimGau
+               PsiDeriv%GaussPar(2, iPrimL, GauSet) = tmpYVector(iPrimL)
+            END DO
+            !write(*,*) matmul(CMatrix, PsiDeriv%GaussPar(2,:,GauSet))-(OverIFactor*YVector)
+            IF (ANY(ABS(matmul(CMatrix, PsiDeriv%GaussPar(2,:,GauSet))-(OverIFactor*YVector)) > 1.0D-15)) THEN
+               write(*,*) "error to high in LGS at t=", ActualTime
+            END IF
+            !write(*,*) "xidot: ", PsiDeriv%GaussPar(2, :, 1)
+         ELSE
+            ! invert C-matrix
+            CALL MatrixInversionDo( CMatrix(:,:), CMatrixInv(:,:), 2, InvCondNr, CMask(1:NInv) )
+            IF ( InvCondNr < CMatrixCondMin ) CMatrixCondMin = InvCondNr
 
-         ! Initialize derivatives array to zero
-         PsiDeriv%GaussPar(:, :, GauSet) = CMPLX(0.0,0.0)
+            ! set the Y vector of fixed gaussians
+            DO iPrimL = NInv+1, Psi%NrPrimGau
+               YVector(CMask(iPrimL)) = CMPLX(0.0,0.0)
+            END DO
 
-         ! build derivatives vector  ( use ZHEMV because only the upper part of the inverse C matrix is stored)
-         NShort = Psi%NrPrimGau
-         CALL ZHEMV("U", NShort, OverIFactor, CMatrixInv(:,:), NShort, YVector(:), 1, CMPLX(0.0,0.0), PsiDeriv%GaussPar(2, 1, GauSet), 3)
+            ! Initialize derivatives array to zero
+            PsiDeriv%GaussPar(:, :, GauSet) = CMPLX(0.0,0.0)
+
+            ! build derivatives vector  ( use ZHEMV because only the upper part of the inverse C matrix is stored)
+            NShort = Psi%NrPrimGau
+            CALL ZHEMV("U", NShort, OverIFactor, CMatrixInv(:,:), NShort, YVector(:), 1, CMPLX(0.0,0.0), PsiDeriv%GaussPar(2, 1, GauSet), 3)
+            IF (ANY(ABS(matmul(CMatrix, PsiDeriv%GaussPar(2,:,GauSet))-(OverIFactor*YVector)) > 1.0D-10)) THEN
+               write(*,*) "error to high in LGS at t=", ActualTime
+            END IF
+         END IF
+         !write(*,*) "xidot: ", PsiDeriv%GaussPar(2, :, 1)
+
          IF ( SimplifyCoefficients ) THEN
             DO iPrimL = 1, NInv
                iCfgL = Prim2Cfg(CMask(iPrimL), Psi%GDim)
@@ -925,6 +985,7 @@ MODULE PsiObject
       DEALLOCATE( HMatrix, OverlapInv )
       DEALLOCATE( CoeffRHS, SbetaDotSinv, ProjGDeriv, ProjHamilt, FirstMom )
       DEALLOCATE( CMatrix, CMatrixInv, YVector )
+      DEALLOCATE( tmpYVector, Work, RWork, Pivot )
 
    END SUBROUTINE ComputeDerivative_OldScheme
 
@@ -1132,6 +1193,13 @@ MODULE PsiObject
       REAL    :: ConditionNr
       COMPLEX :: Rho, dHMatrix
 
+      INTEGER(SHORT_INTEGER_KIND), DIMENSION(:), ALLOCATABLE :: Pivot
+      COMPLEX, DIMENSION(:), ALLOCATABLE        :: Work
+      REAL, DIMENSION(:), ALLOCATABLE           :: RWork
+      COMPLEX, DIMENSION(1)                     :: tmpWork
+      INTEGER( SHORT_INTEGER_KIND )             :: Rank, LWork, Info
+      COMPLEX, DIMENSION(:,:), ALLOCATABLE      :: tmpVMatrix
+
       ! Compute 1/i (=-i) factor which is in the equations of motion
       OverIFactor = CMPLX(0.0,-1.0)
 
@@ -1143,6 +1211,7 @@ MODULE PsiObject
       ! Allocate memory to store the various integrals contained in the equations of motion
       ALLOCATE( VMatrix(1:Psi%NrCfg+NInv,1:Psi%NrCfg+NInv), ZVector(1:Psi%NrCfg+NInv), HMatrix(1:Psi%NrCfg,1:Psi%NrCfg) )
       ALLOCATE( VMatrixInv(1:Psi%NrCfg+NInv,1:Psi%NrCfg+NInv), Solution(1:Psi%NrCfg+NInv) )
+      ALLOCATE( tmpVMatrix(1:Psi%NrCfg+NInv,1:Psi%NrCfg+NInv), Work(1), RWork(2*Psi%NrCfg+NInv), Pivot(Psi%NrCfg+NInv) )
 
       ! ***************************************************************************************
       ! Now compute the V matrix (only upper triangle is constructed)
@@ -1231,12 +1300,40 @@ MODULE PsiObject
       ! Now solve the equation
       ! ***************************************************************************************
 
-      ! Invert TMatrix and store the inverse in TMatrixInv (Only upper diagonal is computed by MatrixInversionDo!!!)
-      CALL MatrixInversionDo( VMatrix, VMatrixInv, 1, ConditionNr )
+      IF (GaussParLGS) THEN
+         Solution = ZVector
+         tmpVMatrix = VMatrix
+         !write(*,*) VMatrix
+         Pivot = 0
+         CALL ZGELSY(Psi%NrCfg+NInv, Psi%NrCfg+NInv, 1, tmpVMatrix, Psi%NrCfg+NInv, Solution, Psi%NrCfg+NInv, Pivot, 1.0D-020, Rank, tmpWork, -1, RWork, Info)
+         DEALLOCATE(Work)
+         LWork = int(real(tmpWork(1)))
+         ALLOCATE(Work(LWork))
+         !write(*,*) "shape VMat: ", shape(tmpVMatrix)
+         !write(*,*) "shape ZVec: ", shape(ZVector)
+         !write(*,*) "shape Solution: ", shape(Solution)
+         !write(*,*) "Psi%NrCfg+NInv: ", Psi%NrCfg+NInv
+         CALL ZGELSY(Psi%NrCfg+NInv, Psi%NrCfg+NInv, 1, tmpVMatrix, Psi%NrCfg+NInv, Solution, Psi%NrCfg+NInv, Pivot, 1.0D-020, Rank, Work, LWork, RWork, Info)
+         IF (INFO /= 0) THEN
+            STOP "ERROR IN ZGELSY"
+         END IF
+         write(*,*) "Time: ", ActualTime
+         write(*,*) Solution
+         Solution = matmul(VMatrix, Solution) - ZVector
+         write(*,*) Solution
+      ELSE
+         Solution = cmplx(0.0, 0.0)
+         ! Invert TMatrix and store the inverse in TMatrixInv (Only upper diagonal is computed by MatrixInversionDo!!!)
+         CALL MatrixInversionDo( VMatrix, VMatrixInv, 1, ConditionNr )
 
-      ! Now multiply RHS by inverse matrix to get the solution of the linear equation
-      NShort = Psi%NrCfg+NInv
-      CALL ZHEMV("U", NShort, CMPLX(1.0,0.0), VMatrixInv(:,:), NShort, ZVector(:), 1, CMPLX(0.0,0.0), Solution(:), 1)
+         ! Now multiply RHS by inverse matrix to get the solution of the linear equation
+         NShort = Psi%NrCfg+NInv
+         CALL ZHEMV("U", NShort, CMPLX(1.0,0.0), VMatrixInv(:,:), NShort, ZVector(:), 1, CMPLX(0.0,0.0), Solution(:), 1)
+         write(*,*) "Time: ", ActualTime
+         write(*,*) Solution
+         ZVector = matmul(VMatrix, Solution) - ZVector
+         write(*,*) ZVector
+      END IF
 
       ! Copy the derivatives of the coefficients to the PsiDeriv%BVector vector
       PsiDeriv%BVector(:,iEl) = OverIFactor * Solution(1:Psi%NrCfg)
@@ -1271,6 +1368,7 @@ MODULE PsiObject
 
       ! Deallocate memory used to store the parts of the equations of motion
       DEALLOCATE( VMatrix, ZVector, HMatrix, VMatrixInv, Solution )
+      DEALLOCATE( Work, RWork, Pivot )
 
    END SUBROUTINE ComputeDerivative_SingleInversion
 

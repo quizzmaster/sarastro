@@ -132,6 +132,8 @@ MODULE SharedData
       INTEGER :: EquationType
       !> Logical flag, when true coeff.s are simplified from the parameter equations
       LOGICAL :: SimplifyCoefficients
+      !> Logical flag, if LGS should be used for the derivatives of the gaussian parameters
+      LOGICAL :: GaussParLGS
 
 !=============================================================================================================
    CONTAINS
@@ -249,6 +251,9 @@ MODULE SharedData
       
       ! define if the coefficients are simplified from the parameter equations
       CALL SetFieldFromInput( InputData, "eom_simplifycoeff", SimplifyCoefficients, .FALSE. )
+
+      ! use ZGELSY for solving C * (d LAMBDA/dt) - Y = 0 instead of (d LAMBDA/dt) = C^-1 * Y
+      CALL SetFieldFromInput( InputData, "eom_gaussparlgs", GaussParLGS, .FALSE. )
 
       ! Close the input file
       CALL CloseFile( InputData )
