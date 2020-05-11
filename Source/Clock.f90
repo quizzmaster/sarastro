@@ -237,14 +237,19 @@ MODULE Clock
    SUBROUTINE LogTimings(  )
       IMPLICIT NONE
       INTEGER :: i
+      REAL, DIMENSION(2) :: TotalTime, AverageTime
+      INTEGER :: SectionFrequency
 
       ! header of the table
       WRITE(*,500)
 
       ! Write one line per each of the internal timers
       DO i = 1, SIZE(InternalTimers)
-         WRITE(*,501) TRIM(ADJUSTL(InternalTimers(i)%Label)), GetTotalTime(InternalTimers(i)), &
-                      GetSectionFrequency(InternalTimers(i)), GetAverageTime(InternalTimers(i))
+         TotalTime = GetTotalTime(InternalTimers(i))
+         SectionFrequency = GetSectionFrequency(InternalTimers(i))
+         AverageTime = GetAverageTime(InternalTimers(i))
+         WRITE(*,501) TRIM(ADJUSTL(InternalTimers(i)%Label)), TotalTime, &
+                      SectionFrequency, AverageTime
       END DO
 
       ! end of the table
