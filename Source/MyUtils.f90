@@ -21,6 +21,8 @@ MODULE MyUtils
    PRIVATE
    PUBLIC :: LookForFreeUnit         ! returns the smallest i>=20 avaiable as I/O unit
    PUBLIC :: NumberToString          ! convert to string an integer number
+   PUBLIC :: ToLowercase             ! convert string to lowercase
+   PUBLIC :: ToUppercase             ! convert string to uppercase
    PUBLIC :: CountLinesInFile        ! counts the number of lines of a file
    PUBLIC :: RemoveDups              ! returns the non repeated elements of an array
    PUBLIC :: Sort                    ! sort an array in ascending order
@@ -97,6 +99,48 @@ MODULE MyUtils
       Fmt = '(I0.'//TRIM(ADJUSTL(NumberToString_nonpadded(N)))//')'
       WRITE(String,Fmt) N
    END FUNCTION NumberToString_padded
+
+
+!*******************************************************************************
+!                           ToLowercase
+!*******************************************************************************
+!>  Converts the input string to lowercase.
+!>
+!> @param    String   Input string.
+!*******************************************************************************
+  SUBROUTINE ToLowercase( String )
+  IMPLICIT NONE
+     CHARACTER(len=*), INTENT(INOUT) :: String
+     INTEGER                :: i
+
+     DO i=1, len(String)
+       SELECT CASE(String(i:i))
+         CASE("A":"Z")
+            String(i:i) = achar(iachar(String(i:i))+32)
+       END SELECT
+     END DO
+  END SUBROUTINE ToLowercase
+
+
+!*******************************************************************************
+!                           ToUppercase
+!*******************************************************************************
+!>  Converts the input string to uppercase.
+!>
+!> @param    String   Input string.
+!*******************************************************************************
+  SUBROUTINE ToUppercase( String )
+  IMPLICIT NONE
+     CHARACTER(len=*), INTENT(INOUT) :: String
+     INTEGER                :: i
+
+     DO i=1, len(String)
+       SELECT CASE(String(i:i))
+         CASE("a":"z")
+            String(i:i) = achar(iachar(String(i:i))-32)
+       END SELECT
+     END DO
+  END SUBROUTINE ToUppercase
 
 
 !*******************************************************************************
