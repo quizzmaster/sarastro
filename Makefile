@@ -332,6 +332,10 @@ COMMONDEP = ${OBJDIR}/MyError.o  ${OBJDIR}/MyConsts.o ${OBJDIR}/MyUtils.o ${OBJD
 ${OBJDIR}/RungeKutta45.o : ${SRCDIR}/RungeKutta45.f90 ${OBJDIR}/PsiObject.o ${OBJDIR}/SharedData.o \
                            ${OBJDIR}/OperatorDefine.o ${OBJDIR}/AdaptGBasis.o ${COMMONDEP}
 
+# Bulirsch-Stoer integrator
+${OBJDIR}/BulirschStoer.o : ${SRCDIR}/BulirschStoer.f90 ${OBJDIR}/PsiObject.o ${OBJDIR}/SharedData.o \
+                            ${OBJDIR}/OperatorDefine.o ${OBJDIR}/AdaptGBasis.o ${COMMONDEP}
+
 # Input and shared data
 ${OBJDIR}/SharedData.o : ${SRCDIR}/SharedData.f90 ${OBJDIR}/InputField.o ${COMMONDEP}
 
