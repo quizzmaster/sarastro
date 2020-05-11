@@ -245,7 +245,7 @@ MODULE RungeKutta45
          Psi4th = Psi; Psi5th = Psi
 
          ! Set initial time
-         CALL StartTimer(RungeKuttaClock)
+         CALL StartTimer(IntegratorClock)
 
          ! evaluate derivatives at t1
          CALL ComputeDerivative( Psi, Deriv(1), Hamiltonian, ActualTime, InverseCondition )
@@ -292,7 +292,7 @@ MODULE RungeKutta45
                IF ( NewStepSize <= tStepMin ) THEN
                   ExitStatus = 1           ! ExitStatus = 1 means that the propagation is terminated because of too low timestep
                   CALL DisposePsi( Psi4th );  CALL DisposePsi( Psi5th )          ! clean up and stop running clock
-                  CALL StopTimer(RungeKuttaClock)
+                  CALL StopTimer(IntegratorClock)
                   EXIT TimePropagation
                ELSE IF ( NewStepSize > tStepMax ) THEN
                   NewStepSize = tStepMax
@@ -350,7 +350,7 @@ MODULE RungeKutta45
          END DO     ! end loop over the attempts to perform a single RK45 step
 
          ! Set final time
-         CALL StopTimer(RungeKuttaClock)
+         CALL StopTimer(IntegratorClock)
 
          ! deallocate memory for the temporary storage of the wavefunction and the derivatives
          CALL DisposePsi( Psi4th );  CALL DisposePsi( Psi5th )

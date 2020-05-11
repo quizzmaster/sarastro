@@ -48,14 +48,14 @@ MODULE Clock
    INTEGER, PARAMETER :: NrTimers = 6
    ! Labels for the timers
    CHARACTER(14), DIMENSION(NrTimers)  ::  TimersLabels = (/ "main          ", &
-                                                             "runge-kutta45 ", &
+                                                             "integrator    ", &
                                                              "derivatives   ", &
                                                              "der_gausspar  ", &
                                                              "der_bvector   ", &
                                                              "mat_inversion " /)
    ! Timers identifier
    INTEGER, PARAMETER, PUBLIC :: TotalClock = 1
-   INTEGER, PARAMETER, PUBLIC :: RungeKuttaClock = 2
+   INTEGER, PARAMETER, PUBLIC :: IntegratorClock = 2
    INTEGER, PARAMETER, PUBLIC :: DerivativesClock = 3
    INTEGER, PARAMETER, PUBLIC :: GaussDerivClock = 4
    INTEGER, PARAMETER, PUBLIC :: BVecDerivClock = 5
