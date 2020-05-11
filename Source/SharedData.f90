@@ -103,6 +103,8 @@ MODULE SharedData
       REAL :: PrintStep
       !> total time of the wavefunction time propagation
       REAL :: TotalTime
+      !> type of integrator
+      CHARACTER(15) :: IntegratorType
 
       ! Integrator setup
       !> in integrating, use fixed steps regardless of the estimated error (in this case step = MaxIntegrationStep )
@@ -217,6 +219,11 @@ MODULE SharedData
       !                 INTEGRATOR AND INVERSION SETUP
       ! ********************************************************************
 
+      ! integrator type
+      CALL SetFieldFromInput( InputData, "integrator", IntegratorType, "RK45")
+      IntegratorType = ADJUSTL(IntegratorType)
+      CALL ToUppercase(IntegratorType)
+      write(*,*) IntegratorType
       ! choose whether you want to use fixed integration steps without adaptation to error estimate
       CALL SetFieldFromInput( InputData, "use_fixed_steps", UseFixedSteps, .FALSE. )
       ! define error tolerance for step adaptation (ignored in case of UseFixedSteps)
