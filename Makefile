@@ -377,3 +377,5 @@ ${OBJDIR}/MyConsts.o : ${SRCDIR}/MyConsts.f90 Makefile
 # Error and warning procedures
 ${OBJDIR}/MyError.o : ${SRCDIR}/MyError.f90 Makefile
 
+${OBJDIR}/EmptyOptimize.o : ${OBJDIR}/PsiObject.o
+
