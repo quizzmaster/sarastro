@@ -52,6 +52,9 @@ MODULE PsiObject
    PUBLIC :: GetOperatorMatrix
 
    PUBLIC :: PsiPlusDeltaPsi
+   PUBLIC :: SumPsi
+   PUBLIC :: DiffPsi
+   PUBLIC :: CopyPsi
 !    PUBLIC :: ASSIGNMENT(=), OPERATOR(+), OPERATOR(*)  ! Overloaded operators
 !
 !    INTERFACE ASSIGNMENT (=)           ! Assigment between two WaveFunct or two Derivatives   Psi1 = Psi2
@@ -1942,6 +1945,71 @@ MODULE PsiObject
       DeltaPsiProd%GaussPar = alpha * DeltaPsi%GaussPar
 
    END FUNCTION MultiplyDerivativeByScalar
+
+
+   !*******************************************************************************
+   !          SumPsi
+   !*******************************************************************************
+   !> Sum two instances of WaveFunct (Psi1 + Fact*Psi2).
+   !>
+   !> @param    Psi1, Psi2       input variations to sum.
+   !> @param    Fact             prefactor of Psi2
+   !> @returns  PsiSum           on output sum of the variations
+   !*******************************************************************************
+      TYPE(WaveFunct) FUNCTION SumPsi( Psi1, Psi2, Fact )  RESULT( PsiSum )
+         IMPLICIT NONE
+         REAL, INTENT(IN)                     :: Fact
+         TYPE(WaveFunct), INTENT(IN)          :: Psi1, Psi2
+
+         ! In case derivative has not been setup, allocate memory with the correct dimensionality of the wavefunction
+         CALL ERROR( .NOT. Psi1%WaveFunctIsSetup .OR. .NOT. Psi2%WaveFunctIsSetup, &
+               " SumWaveFuncts: using non initialized WaveFunct instances as summands", ERR_OBJ_MISUSE )
+
+         ! Allocate memory for the dummy output
+         CALL CopyPsi(PsiSum, Psi1)
+
+         ! Checks on the derivative dimensions are not done here, anyway if different array size are used output error is obvious
+         PsiSum%BVector  = Fact*(Psi1%BVector + Psi2%BVector)
+         ! TODO only xi!
+         PsiSum%GaussPar(2, :, :) = Fact*(Psi1%GaussPar(2, :, :) + Psi2%GaussPar(2, :, :))
+         CALL UpdateWaveFunctInstance(PsiSum)
+
+      END FUNCTION SumPsi
+
+
+      !*******************************************************************************
+      !          DiffPsi
+      !*******************************************************************************
+      !> Difference of two instances of WaveFunct (Psi1  - Psi2).
+      !>
+      !> @param    Psi1, Psi2       input variations to sum.
+      !> @returns  PsiDiff          on output difference of the variations
+      !*******************************************************************************
+         TYPE(Derivative) FUNCTION DiffPsi( Psi1, Psi2 )  RESULT( PsiDiff )
+            IMPLICIT NONE
+            TYPE(WaveFunct), INTENT(IN)          :: Psi1, Psi2
+
+            ! In case derivative has not been setup, allocate memory with the correct dimensionality of the wavefunction
+            CALL ERROR( .NOT. Psi1%WaveFunctIsSetup .OR. .NOT. Psi2%WaveFunctIsSetup, &
+                  " SumWaveFuncts: using non initialized WaveFunct instances as summands", ERR_OBJ_MISUSE )
+
+            ! Store the type of wavefunction
+            PsiDiff%WFType = Psi1%WFType
+
+            ! ALLOCATE MEMORY FOR DERIVATIVES
+            ALLOCATE( PsiDiff%BVector( SIZE(Psi1%BVector,1), SIZE(Psi1%BVector,2) ) )
+            ALLOCATE( PsiDiff%GaussPar( SIZE(Psi1%GaussPar,1), SIZE(Psi1%GaussPar,2), SIZE(Psi1%GaussPar,3) ) )
+
+            ! Derivative is now well defined
+            PsiDiff%DerivativeIsSetup = .TRUE.
+
+            ! Checks on the derivative dimensions are not done here, anyway if different array size are used output error is obvious
+            PsiDiff%BVector  = Psi1%BVector - Psi2%BVector
+            ! TODO only xi!
+            PsiDiff%GaussPar(2, :, :) = Psi1%GaussPar(2, :, :) - Psi2%GaussPar(2, :, :)
+            !CALL UpdateWaveFunctInstance(PsiDiff)
+
+         END FUNCTION DiffPsi
 
 
 !===========================================================================================================
