@@ -18,6 +18,7 @@ PROGRAM sarastro
    USE OperatorDefine
    USE MatrixInversion
    USE RungeKutta45
+   USE BulirschStoer
 
    USE GauConf
 
@@ -154,8 +155,14 @@ PROGRAM sarastro
    ! Write to output file the optimized gaussians
 !    CALL WritePsiToFile( Psi0, (/ "psi_opt_bvec.inp     ", "psi_opt_gaussians.inp" /) )
 
-   ! Integrator setup for Runge-Kutta 4(5)
-   CALL SetupRungeKutta45( UseFixedSteps, MinStep=MinIntegrationStep, MaxStep=MaxIntegrationStep, InpTolerance=ErrorTolerance )
+   SELECT CASE(IntegratorType)
+      CASE("RK45")
+         ! Integrator setup for Runge-Kutta 4(5)
+         CALL SetupRungeKutta45( UseFixedSteps, MinStep=MinIntegrationStep, MaxStep=MaxIntegrationStep, InpTolerance=ErrorTolerance )
+      CASE("BS")
+         ! Integrator setup for Bulirsch-Stoer
+         CALL SetupBulirschStoer( UseFixedSteps, MinStep=MinIntegrationStep, MaxStep=MaxIntegrationStep, InpTolerance=ErrorTolerance, NrCfg=Psi0%NrCfg, NrPrimGau=Psi0%NrPrimGau, Poly=.true. )
+   END SELECT
    
    ! setup the equations of motion and optionally freeze gaussians with small-large populations / small coefficients
    ! the condition on the coefficient has priority over the condition on populations
@@ -219,8 +226,14 @@ PROGRAM sarastro
    ! loop over the time propagation steps which are done between output printing
    DO iPrintStep = 1, NPrintSteps
 
-      ! Integrate from time ActualTime to ActualTime+PrintStep
-      IntegratorStat = DoPropagationRungeKutta45( PsiT, Hamiltonian, ActualTime, PrintStep )
+      SELECT CASE(IntegratorType)
+         CASE("RK45")
+            ! Integrate from time ActualTime to ActualTime+PrintStep
+            IntegratorStat = DoPropagationRungeKutta45( PsiT, Hamiltonian, ActualTime, PrintStep )
+         CASE("BS")
+            ! Integrate from time ActualTime to ActualTime+PrintStep
+            IntegratorStat = DoPropagationBulirschStoer( PsiT, Hamiltonian, ActualTime, PrintStep )
+      END SELECT
 
       ! When IntegratorStat is not zero, propagation has been ended for small time step
       IF  (IntegratorStat /= 0 ) THEN
@@ -256,8 +269,14 @@ PROGRAM sarastro
 
    ! Deallocate memory for matrix inversion module
    CALL MatrixInversionDispose(  )
-   ! Close units and deallocate memory for RK45
-   CALL DisposeRungeKutta45( ActualTime )
+   SELECT CASE(IntegratorType)
+      CASE("RK45")
+         ! Close units and deallocate memory for RK45
+         CALL DisposeRungeKutta45( ActualTime )
+      CASE("BS")
+         ! Close units and deallocate memory for BS
+         CALL DisposeBulirschStoer( ActualTime )
+   END SELECT
    ! Deallocate memory for the hamiltonian operator object
    CALL DisposeOperator( Hamiltonian )
    ! Deallocate memory for the wavefunction objects
